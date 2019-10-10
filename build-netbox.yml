@@ -1,0 +1,74 @@
+---
+
+- name: Install rsyslog 
+  hosts: all
+  become: yes
+  become_method: sudo
+  tasks:
+  - apt:
+      name: rsyslog
+      state: present
+  tags:
+  - rsyslog
+
+- name: Install netbox
+  hosts: all
+  become: yes
+  become_method: sudo
+  roles:
+    - geerlingguy.postgresql
+    - ansible-role-netbox-master
+  tags:
+    - netbox
+  vars:
+    netbox_stable: true
+    netbox_socket: "0.0.0.0:80"
+    netbox_ldap_enabled: true
+    netbox_ldap_config_template: netbox_ldap_config.py.j2
+    ldap_server_uri: "ldap://my_amazing_ldap:3268"
+    netbox_superuser_password: netbox
+    netbox_napalm_enabled: true
+    netbox_napalm_packages:
+    - napalm
+    - napalm-procurve
+    netbox_keep_uwsgi_updated: true
+    netbox_config:  
+      METRICS_ENABLED: true
+      NAPALM_USERNAME: netbox.ssh.user
+      NAPALM_PASSWORD: "super secret password yolo"
+      NAPALM_TIMEOUT: 30
+      NAPALM_ARGS:
+        keepalive: 60
+      LOGGING:
+        version: 1
+        disable_existing_loggers: true
+        handlers:
+          file: 
+            level: INFO
+            class: logging.FileHandler
+            filename: /var/log/netbox.log
+        loggers:
+          django:
+            handlers:
+              - file
+            level: INFO
+      LOGIN_REQUIRED: yes
+      TIME_ZONE: "Australia/Melbourne"
+      PREFER_IPV4: true
+      ALLOWED_HOSTS:
+        - "{{ inventory_hostname }}"
+        # The following should not be used in production, probably.
+        # This playbook gets used by Vagrant where we don't know the actual hostname.
+        - "*"
+      MEDIA_ROOT: "{{ netbox_shared_path }}/media"
+      REPORTS_ROOT: "{{ netbox_shared_path }}/reports"
+    netbox_database_socket: "{{ postgresql_unix_socket_directories[0] }}"
+    netbox_keep_uwsgi_updated: true
+    postgresql_users:
+      - name: "{{ netbox_database_user }}"
+        role_attr_flags: CREATEDB,NOSUPERUSER
+
+# You can use this playbook as-is to setup a full NetBox server, just change
+# the FQDN below. It'll accept HTTP requests on specified FQDN.
+#
+# ansible-playbook -i netbox.example.com, playbook_single_host_deploy.yml
